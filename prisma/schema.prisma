@@ -1,0 +1,229 @@
+// Trading Journal Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ACCOUNTS
+// ============================================
+
+model Account {
+  id                String   @id @default(cuid())
+  name              String
+  type              String   // "live", "demo", "prop_firm", "personal"
+  accountGroup      String?  // For grouping accounts (e.g., "All Prop Firms")
+  baseCurrency      String   @default("USD")
+  initialBalance    Float
+  currentBalance    Float
+  maxDrawdownLimit  Float?   // For prop firms
+  dailyLossLimit    Float?   // For prop firms
+  profitTarget      Float?   // For prop firms
+  maxRiskPerTrade   Float?   // Percentage
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  trades            Trade[]
+  ruleViolations    RuleViolation[]
+  reviews           Review[]
+  savedViews        SavedView[]
+}
+
+// ============================================
+// STRATEGIES
+// ============================================
+
+model Strategy {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  coreRules   String?  // JSON array of core setup rules
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  confluences   Confluence[]
+  trades        Trade[]
+}
+
+model Confluence {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String?  // e.g., "price_action", "indicator", "session", etc.
+  isCustom    Boolean  @default(false)
+  strategyId  String
+  strategy    Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  tradeConfluences TradeConfluence[]
+}
+
+// ============================================
+// TRADES
+// ============================================
+
+model Trade {
+  id                    String   @id @default(cuid())
+
+  // Basic Trade Info
+  accountId             String
+  account               Account  @relation(fields: [accountId], references: [id])
+  instrument            String
+  direction             String   // "long" or "short"
+
+  // Position Details
+  positionSize          Float
+  entryPrice            Float
+  exitPrice             Float
+  stopLoss              Float?
+  takeProfit            Float?
+
+  // Risk Management
+  riskAmount            Float?   // Currency amount
+  riskPercent           Float?   // Percentage of account
+  riskR                 Float?   // R multiple
+
+  // Risk/Reward
+  plannedRR             Float?   // Planned R:R ratio
+  actualRR              Float?   // Actual R:R ratio
+
+  // PnL
+  pnl                   Float    // Currency
+  pnlPercent            Float?   // Percentage
+  pnlR                  Float?   // R multiple
+
+  // Timestamps
+  entryDate             DateTime
+  entryTime             String?  // Time string
+  exitDate              DateTime?
+  exitTime              String?  // Time string
+
+  // Trade Classification
+  session               String?  // "NY", "London", "Asia", "pre_market", "after_hours"
+  tradeType             String?  // "scalp", "day_trade", "swing"
+
+  // Screenshots (base64 encoded)
+  screenshotBeforeEntry String?
+  screenshotAfterExit   String?
+
+  // Notes and Tags
+  notes                 String?
+  tags                  String?  // JSON array of tag strings
+
+  // Strategy and Confluences
+  strategyId            String?
+  strategy              Strategy? @relation(fields: [strategyId], references: [id])
+  confluencesUsed       String?  // JSON array of confluence IDs
+
+  // Psychology
+  emotionEntry          String?  // "fear", "neutral", "confidence", "euphoria", "revenge"
+  emotionExit           String?
+  planAdherence         Int?     // 1-5 rating
+  sleepQuality          Int?     // 1-5 rating
+  stressLevel           Int?     // 1-5 rating
+
+  // Markers
+  isRuleViolation       Boolean  @default(false)
+  isOverTrading         Boolean  @default(false)
+  isNewsDay             Boolean  @default(false)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tradeConfluences      TradeConfluence[]
+}
+
+model TradeConfluence {
+  id       String @id @default(cuid())
+  tradeId  String
+  trade    Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  confluenceId  String
+  confluence Confluence @relation(fields: [confluenceId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// RULES & COMPLIANCE
+// ============================================
+
+model TradingRule {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  ruleType        String   // "max_daily_loss", "max_trades", "session_restriction", etc.
+  ruleValue       Float?   // Numeric value for the rule
+  ruleString      String?  // String value for the rule
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  ruleViolations  RuleViolation[]
+}
+
+model RuleViolation {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  tradeId     String?
+  ruleId      String
+  rule        TradingRule @relation(fields: [ruleId], references: [id])
+  description String?
+  severity    String   // "low", "medium", "high"
+  violationDate DateTime @default(now())
+
+  createdAt   DateTime @default(now())
+}
+
+// ============================================
+// REVIEWS
+// ============================================
+
+model Review {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  reviewType  String   // "daily", "weekly", "monthly"
+  reviewDate  DateTime
+  summary     String?  // 3-point summary
+  bestTrades  String?  // JSON array
+  worstTrades String?  // JSON array
+  strategyBreakdown String?
+  suggestions String?
+  psychologyNotes String?
+  ruleComplianceScore Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// SAVED VIEWS & FILTERS
+// ============================================
+
+model SavedView {
+  id          String   @id @default(cuid())
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  name        String
+  filters     String   // JSON object with filter criteria
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// USER (simplified - can be extended)
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  settings  String?  // JSON object for user preferences
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
