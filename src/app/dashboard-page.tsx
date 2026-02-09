@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { NewTradeDialog } from '@/components/new-trade-dialog';
 import {
   TrendingUp,
   TrendingDown,
@@ -22,6 +24,22 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/accounts')
+      .then(r => r.json())
+      .then(data => {
+        setAccounts(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching accounts:', err);
+        setLoading(false);
+      });
+  }, []);
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -33,10 +51,7 @@ export default function DashboardPage() {
               Welcome back! Here's your trading performance overview.
             </p>
           </div>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Trade
-          </Button>
+          {!loading && <NewTradeDialog accounts={accounts} />}
         </div>
 
         {/* Key Metrics Grid */}
